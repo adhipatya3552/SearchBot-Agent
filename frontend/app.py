@@ -11,7 +11,7 @@ st.set_page_config(
 )
 
 # Backend URL — change this after Render deployment
-API_URL = os.getenv("API_URL", "http://127.0.0.1:8000")
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000").rstrip("/")
 
 # Initialize file uploader state to clear it on indexing success
 if "file_uploader_key" not in st.session_state:

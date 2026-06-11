@@ -1,11 +1,12 @@
 import os
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 es = Elasticsearch(
     cloud_id=os.getenv("ELASTIC_CLOUD_ID"),
@@ -14,13 +15,15 @@ es = Elasticsearch(
 
 def get_query_embedding(query: str) -> list:
     """Get embedding for search query"""
-    result = genai.embed_content(
-        model="models/gemini-embedding-2",
-        content=query,
-        task_type="retrieval_query",   # different task type for queries
-        output_dimensionality=768
+    response = client.models.embed_content(
+        model="gemini-embedding-2",
+        contents=query,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_QUERY",
+            output_dimensionality=768
+        )
     )
-    return result["embedding"]
+    return response.embeddings[0].values
 
 def semantic_search(query: str, top_k: int = 5) -> list:
     """Pure vector similarity search"""

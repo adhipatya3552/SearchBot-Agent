@@ -1,14 +1,15 @@
 import os
 import uuid
 import fitz  # PyMuPDF
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from elasticsearch import Elasticsearch
 from dotenv import load_dotenv
 
 load_dotenv()
 
 # Initialize clients
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 es = Elasticsearch(
     cloud_id=os.getenv("ELASTIC_CLOUD_ID"),
@@ -17,13 +18,15 @@ es = Elasticsearch(
 
 def get_embedding(text: str) -> list:
     """Get embedding vector from Gemini API"""
-    result = genai.embed_content(
-        model="models/gemini-embedding-2",
-        content=text,
-        task_type="retrieval_document",
-        output_dimensionality=768
+    response = client.models.embed_content(
+        model="gemini-embedding-2",
+        contents=text,
+        config=types.EmbedContentConfig(
+            task_type="RETRIEVAL_DOCUMENT",
+            output_dimensionality=768
+        )
     )
-    return result["embedding"]
+    return response.embeddings[0].values
 
 def extract_chunks(file_path: str, doc_name: str, chunk_size: int = 400) -> list:
     """Extract text from PDF, DOCX, CSV, TXT, or MD, and split into chunks"""

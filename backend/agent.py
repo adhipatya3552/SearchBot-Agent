@@ -1,13 +1,15 @@
 import os
 import time
-import google.generativeai as genai
+from google import genai
+from google.genai import types
+from google.genai import errors
 from dotenv import load_dotenv
 from search import hybrid_search
 from ingest import list_documents
 
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ─── System Prompt ──────────────────────────────────────────────────
 SYSTEM_PROMPT = """You are SearchBot, an intelligent AI document assistant.
@@ -48,11 +50,14 @@ class SearchBotAgent:
     """Main agent class that combines Gemini + Elasticsearch"""
 
     def __init__(self):
-        self.model = genai.GenerativeModel(
-            model_name="gemini-2.5-flash-lite",
-            system_instruction=SYSTEM_PROMPT
+        self.chat = client.chats.create(
+            model="gemini-2.5-flash-lite",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.1,
+                max_output_tokens=1024
+            )
         )
-        self.chat = self.model.start_chat(history=[])
 
     def ask(self, question: str) -> str:
         """
@@ -79,28 +84,30 @@ Cite which document and page number your answer comes from."""
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = self.chat.send_message(
-                    message,
-                    generation_config=genai.GenerationConfig(
-                        temperature=0.1,        # low = more factual
-                        max_output_tokens=1024
-                    )
-                )
+                response = self.chat.send_message(message)
                 return response.text
 
-            except Exception as e:
-                error_msg = str(e)
+            except errors.APIError as e:
                 # Retry on rate limit (429) errors
-                if "429" in error_msg and attempt < max_retries - 1:
+                if e.code == 429 and attempt < max_retries - 1:
                     wait_time = (attempt + 1) * 15  # 15s, 30s, 45s
                     print(f"⏳ Rate limited, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})...")
                     time.sleep(wait_time)
                     continue
-                return f"❌ Error generating response: {error_msg}"
+                return f"❌ Error generating response: {e.message}"
+            except Exception as e:
+                return f"❌ Error generating response: {str(e)}"
 
     def reset(self):
         """Clear conversation history"""
-        self.chat = self.model.start_chat(history=[])
+        self.chat = client.chats.create(
+            model="gemini-2.5-flash-lite",
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.1,
+                max_output_tokens=1024
+            )
+        )
         print("Chat history cleared")
 
     def get_docs(self) -> list:
